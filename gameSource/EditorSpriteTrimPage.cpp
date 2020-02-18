@@ -326,6 +326,7 @@ void EditorSpriteTrimPage::actionPerformed( GUIComponent *inTarget ) {
             char *spriteInvisibleWhenHolding = new char[ numSprites ];
             int *spriteInvisibleWhenWorn = new int[ numSprites ];
             char *spriteBehindSlots = new char[ numSprites ];
+            char *spriteInvisibleWhenContained = new char[ numSprites ];
             char *spriteIsHead = new char[ numSprites ];
             char *spriteIsBody = new char[ numSprites ];
             char *spriteIsBackFoot = new char[ numSprites ];
@@ -550,6 +551,7 @@ void EditorSpriteTrimPage::actionPerformed( GUIComponent *inTarget ) {
                 spriteInvisibleWhenHolding[i] = false;
                 spriteInvisibleWhenWorn[i] = false;
                 spriteBehindSlots[i] = false;
+                spriteInvisibleWhenContained[i] = false;
                 spriteIsHead[i] = false;
                 spriteIsBody[i] = false;
                 spriteIsBackFoot[i] = false;
@@ -639,6 +641,7 @@ void EditorSpriteTrimPage::actionPerformed( GUIComponent *inTarget ) {
                        spriteInvisibleWhenHolding,
                        spriteInvisibleWhenWorn,
                        spriteBehindSlots,
+                       spriteInvisibleWhenContained,
                        spriteIsHead,
                        spriteIsBody,
                        spriteIsBackFoot,
@@ -662,6 +665,7 @@ void EditorSpriteTrimPage::actionPerformed( GUIComponent *inTarget ) {
             delete [] spriteInvisibleWhenHolding;
             delete [] spriteInvisibleWhenWorn;
             delete [] spriteBehindSlots;
+            delete [] spriteInvisibleWhenContained;
             delete [] spriteIsHead;
             delete [] spriteIsBody;
             delete [] spriteIsBackFoot;
@@ -951,8 +955,12 @@ void EditorSpriteTrimPage::drawUnderComponents( doublePair inViewCenter,
                           r.xEnd, r.yEnd );
                 }
             
-            
-            setDrawColor( 1, 0, 0, 0.5 );
+            if( isShiftKeyDown() ) {
+                setDrawColor( 1, 1, 1, 1.0 );
+                }
+            else {
+                setDrawColor( 1, 0, 0, 0.5 );
+                }
             drawSprite( mFreehandSelectionSprite, center );
 
             doublePair mouseCenter = { lastMouseX + 1, lastMouseY - 1 };
@@ -976,7 +984,12 @@ void EditorSpriteTrimPage::drawUnderComponents( doublePair inViewCenter,
 
 
                 if( mFreehandSplitMode ) {
-                    setDrawColor( 1, 1, 0, 0.50 );
+                    if( isShiftKeyDown() ) {
+                        setDrawColor( 1, 1, 0, 0.90 );
+                        }
+                    else {
+                        setDrawColor( 1, 1, 0, 0.50 );
+                        }
                     
                     double diam = mBrushSizeSlider.getValue(); 
                     int rA = floor( diam / 2 );

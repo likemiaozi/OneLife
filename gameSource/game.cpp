@@ -1,7 +1,14 @@
-int versionNumber = 235;
+int versionNumber = 311;
 int dataVersionNumber = 0;
 
 int binVersionNumber = versionNumber;
+
+// Note to modders:
+// Please use this tag to describe your client honestly and uniquely
+// client_official is reserved for the unmodded client
+// do not include whitespace in your tag
+const char *clientTag = "client_official";
+
 
 
 // NOTE that OneLife doesn't use account hmacs
@@ -76,6 +83,7 @@ CustomRandomSource randSource( 34957197 );
 #include "emotion.h"
 #include "photos.h"
 #include "lifeTokens.h"
+#include "fitnessScore.h"
 
 
 #include "FinalMessagePage.h"
@@ -88,6 +96,8 @@ CustomRandomSource randSource( 34957197 );
 #include "SettingsPage.h"
 #include "ReviewPage.h"
 #include "TwinPage.h"
+#include "PollPage.h"
+#include "GeneticHistoryPage.h"
 //#include "TestPage.h"
 
 #include "ServerActionPage.h"
@@ -97,6 +107,8 @@ CustomRandomSource randSource( 34957197 );
 #include "musicPlayer.h"
 
 #include "whiteSprites.h"
+
+#include "message.h"
 
 
 // should we pull the map
@@ -140,6 +152,8 @@ RebirthChoicePage *rebirthChoicePage;
 SettingsPage *settingsPage;
 ReviewPage *reviewPage;
 TwinPage *twinPage;
+PollPage *pollPage;
+GeneticHistoryPage *geneticHistoryPage;
 //TestPage *testPage = NULL;
 
 
@@ -630,10 +644,14 @@ void initFrameDrawer( int inWidth, int inHeight, int inTargetFrameRate,
 
     reviewPage = new ReviewPage( reviewURL );
     
-    delete [] reviewURL;
 
     twinPage = new TwinPage();
 
+    pollPage = new PollPage( reviewURL );
+    delete [] reviewURL;
+    
+    geneticHistoryPage = new GeneticHistoryPage();
+    
 
     // 0 music headroom needed, because we fade sounds before playing music
     setVolumeScaling( 10, 0 );
@@ -720,6 +738,8 @@ void freeFrameDrawer() {
     delete settingsPage;
     delete reviewPage;
     delete twinPage;
+    delete pollPage;
+    delete geneticHistoryPage;
     
     //if( testPage != NULL ) {
     //    delete testPage;
@@ -746,7 +766,7 @@ void freeFrameDrawer() {
     
     freePhotos();
     freeLifeTokens();
-    
+    freeFitnessScore();
 
     if( reflectorURL != NULL ) {
         delete [] reflectorURL;
@@ -820,6 +840,60 @@ static void drawPauseScreen() {
         drawPos = add( drawPos, lastScreenViewCenter );
 
         drawSprite( instructionsSprite, drawPos );
+
+        TextAlignment a = getMessageAlign();
+
+
+
+        drawPos = lastScreenViewCenter;
+        
+        drawPos.x -= 600;
+        drawPos.y += 320;
+        
+
+        doublePair rectPos = drawPos;
+        rectPos.x += 155;
+        rectPos.y -= 320;
+        
+        setDrawColor( 1, 1, 1, 0.5 * pauseScreenFade );
+        
+        drawRect( rectPos, 182, 362 );
+
+        setDrawColor( 0.2, 0.2, 0.2, 0.85 * pauseScreenFade  );
+
+        drawRect( rectPos, 170, 350  );
+
+        
+        setMessageAlign( alignLeft );
+        drawMessage( translate( "commandHintsA" ), drawPos, false, 
+                     pauseScreenFade );
+
+
+
+        drawPos = lastScreenViewCenter;
+        
+        drawPos.x += 285;
+        drawPos.y += 320;
+        
+
+        rectPos = drawPos;
+        rectPos.x += 160;
+        rectPos.y -= 320;
+        
+        setDrawColor( 1, 1, 1, 0.5 * pauseScreenFade );
+        
+        drawRect( rectPos, 187, 362 );
+
+        setDrawColor( 0.2, 0.2, 0.2, 0.85 * pauseScreenFade  );
+
+        drawRect( rectPos, 175, 350  );
+
+        
+        setMessageAlign( alignLeft );
+        drawMessage( translate( "commandHintsB" ), drawPos, false, 
+                     pauseScreenFade );
+        
+        setMessageAlign( a );
         }
     
 
@@ -1601,7 +1675,8 @@ void drawFrame( char inUpdate ) {
                     initPhotos();
                     
                     initLifeTokens();
-
+                    initFitnessScore();
+                    
                     initMusicPlayer();
                     setMusicLoudness( musicLoudness );
                     
@@ -1651,8 +1726,13 @@ void drawFrame( char inUpdate ) {
             }
         else if( currentGamePage == twinPage ) {
             if( twinPage->checkSignal( "cancel" ) ) {
-                existingAccountPage->setStatus( NULL, false );
-                currentGamePage = existingAccountPage;
+                if( isHardToQuitMode() ) {
+                    currentGamePage = rebirthChoicePage;
+                    }
+                else {
+                    existingAccountPage->setStatus( NULL, false );
+                    currentGamePage = existingAccountPage;
+                    }
                 currentGamePage->base_makeActive( true );
                 }
             else if( twinPage->checkSignal( "done" ) ) {
@@ -1662,6 +1742,14 @@ void drawFrame( char inUpdate ) {
         else if( currentGamePage == existingAccountPage ) {    
             if( existingAccountPage->checkSignal( "quit" ) ) {
                 quitGame();
+                }
+            else if( existingAccountPage->checkSignal( "poll" ) ) {
+                currentGamePage = pollPage;
+                currentGamePage->base_makeActive( true );
+                }
+            else if( existingAccountPage->checkSignal( "genes" ) ) {
+                currentGamePage = geneticHistoryPage;
+                currentGamePage->base_makeActive( true );
                 }
             else if( existingAccountPage->checkSignal( "settings" ) ) {
                 currentGamePage = settingsPage;
@@ -1902,15 +1990,19 @@ void drawFrame( char inUpdate ) {
                 }
             else if( livingLifePage->checkSignal( "twinCancel" ) ) {
                 
-                existingAccountPage->setStatus( NULL, false );
-
                 lastScreenViewCenter.x = 0;
                 lastScreenViewCenter.y = 0;
 
                 setViewCenterPosition( lastScreenViewCenter.x, 
                                        lastScreenViewCenter.y );
                 
-                currentGamePage = existingAccountPage;
+                if( isHardToQuitMode() ) {
+                    currentGamePage = rebirthChoicePage;
+                    }
+                else {
+                    existingAccountPage->setStatus( NULL, false );    
+                    currentGamePage = existingAccountPage;
+                    }
                 
                 currentGamePage->base_makeActive( true );
                 }
@@ -1996,6 +2088,23 @@ void drawFrame( char inUpdate ) {
                     currentGamePage = livingLifePage;
                     }
                 else {
+                    currentGamePage = pollPage;
+                    }
+                currentGamePage->base_makeActive( true );
+                }
+            }
+        else if( currentGamePage == pollPage ) {
+            if( pollPage->checkSignal( "done" ) ) {
+                currentGamePage = rebirthChoicePage;
+                currentGamePage->base_makeActive( true );
+                }
+            }
+        else if( currentGamePage == geneticHistoryPage ) {
+            if( geneticHistoryPage->checkSignal( "done" ) ) {
+                if( !isHardToQuitMode() ) {
+                    currentGamePage = existingAccountPage;
+                    }
+                else {
                     currentGamePage = rebirthChoicePage;
                     }
                 currentGamePage->base_makeActive( true );
@@ -2020,6 +2129,14 @@ void drawFrame( char inUpdate ) {
                 }
             else if( rebirthChoicePage->checkSignal( "menu" ) ) {
                 currentGamePage = existingAccountPage;
+                currentGamePage->base_makeActive( true );
+                }
+            else if( rebirthChoicePage->checkSignal( "genes" ) ) {
+                currentGamePage = geneticHistoryPage;
+                currentGamePage->base_makeActive( true );
+                }
+            else if( rebirthChoicePage->checkSignal( "friends" ) ) {
+                currentGamePage = twinPage;
                 currentGamePage->base_makeActive( true );
                 }
             else if( rebirthChoicePage->checkSignal( "quit" ) ) {

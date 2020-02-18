@@ -28,6 +28,36 @@ fi
 
 
 
+
+pauseToVerify=0
+
+# two arguments means automation
+if [ $# -ne 2 ]
+then
+	echo ""
+	echo ""
+	echo "Pause to verify Steam build along the way?"
+	echo ""
+	echo "Enter YES to pause, or press [ENTER] to skip."
+	echo ""
+	echo -n "Pause later: "
+	read pauseWord
+
+	if [ "$pauseWord" = "YES" ]
+	then
+		echo
+		echo "Pausing later to verify Steam build."
+		echo
+		pauseToVerify=1
+	else
+		echo
+		echo "NOT pausing later."
+		echo
+	fi
+fi
+
+
+
 # note that if we're running on cron-job automation, this might not work
 # in genral, we have never done cron-job automation for midnight updates
 # (because we are updating servers in batches) so it probably doesn't matter
@@ -36,6 +66,23 @@ echo "Logging in to steamcmd to make sure credentials are cached"
 echo ""
 
 steamcmd +login "jasonrohrergames" +quit
+
+
+
+# two arguments means automation
+if [ $# -ne 2 ]
+then
+	echo ""
+	echo ""
+	lastBuildID=`~/checkout/OneLifeWorking/scripts/getLatestSteamBuildID.sh`
+	
+	echo "Seeing last Steam build ID of $lastBuildID"
+	echo ""
+	echo "Check Steamworks and verify that this is correct."
+	echo ""
+	echo -n "Hit [ENTER] when ready: "
+	read
+fi
 
 
 
@@ -512,19 +559,71 @@ echo ""
 echo "Building Steam Depot and making it public/live"
 echo ""
 
-steamcmd +login "jasonrohrergames" +run_app_build -desc OneLifeContent_v$newVersion ~/checkout/OneLifeWorking/build/steam/app_build_content_595690.vdf +quit
+
+oldBuildID=`~/checkout/OneLifeWorking/scripts/getLatestSteamBuildID.sh`
+
+
+steamcmd +login "jasonrohrergames" +run_app_build -desc OneLifeContent_v$newVersion ~/checkout/OneLifeWorking/build/steam/app_build_content_595690.vdf +quit | tee /tmp/steamBuildLog.txt
+
+
+newBuildID=`grep BuildID /tmp/steamBuildLog.txt | sed "s/.*(BuildID //" | sed "s/).*//"`
+
+
+
+echo ""
+echo "Old Steam build ID:  $oldBuildID"
+echo "New Steam build ID:  $newBuildID"
+echo ""
+
+if [[ $newBuildID = "" || $newBuildID -le $oldBuildID ]]
+then
+
+	echo ""
+	echo "Steam build failed, trying remote build as backup"
+	echo ""
+	
+	echo
+	echo "Remote Steam build starting"
+	echo
+
+    # two arguments means automation
+	if [ $# -ne 2 ]
+	then
+		# run ssh interactively so we can pause at error
+		ssh build.onehouronelife.com 'cd ~/checkout/OneLifeWorking; git pull; ~/checkout/OneLifeWorking/scripts/generateSteamContentDepot.sh'
+	else 
+		# automation, do not run ssh interactively
+		ssh -n build.onehouronelife.com 'cd ~/checkout/OneLifeWorking; git pull; ~/checkout/OneLifeWorking/scripts/generateSteamContentDepot.sh'
+	fi
+	echo
+	echo "Remote Steam build done"
+	echo
+fi
+
 
 
 
 echo "" 
-echo "Deleting temporary diffWorking directory"
+echo "Keeping temporary diffWorking directory around for future reference"
 echo ""
 
-rm -r ~/checkout/diffWorking
+# don't delete this.  If something goes wrong, we'll want to look at it
+#
+# rm -r ~/checkout/diffWorking
 
 
 
+if [ $pauseToVerify -eq 1 ]
+then
+	echo "" 
+	echo "As requested, PAUSING now that Steam build is done."
+	echo ""
 
+	echo "Press [ENTER] when ready."
+	echo ""
+	echo -n "Ready? "
+	read goWord
+fi
 
 
 
